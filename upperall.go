@@ -7,11 +7,24 @@ import (
     "flag"
     "fmt"
     "strconv"
+    "sort"
 )
 
 var target string = ""
 var upper string = ""
-var m = map[int][]string{}
+var m = []SearchMatch{}
+
+type SearchMatch struct {
+    file    string
+    occurrences int
+}
+
+// implements sort.Interface for []SearchMatch
+type ByOccurrences []SearchMatch
+
+func (a ByOccurrences) Len() int           { return len(a) }
+func (a ByOccurrences) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByOccurrences) Less(i, j int) bool { return a[i].occurrences> a[j].occurrences}
 
 func visit(path string, f os.FileInfo, err error) error {
     if !f.IsDir() {
@@ -50,7 +63,8 @@ func visit(path string, f os.FileInfo, err error) error {
                 if matches > 0 {
                     news := strings.Replace(string(buf[:n]), target, upper, -1)
                     _, err = fi.WriteAt([]byte(news), i) 
-                    m[matches] = append(m[matches], path)
+                    sm := SearchMatch{path, matches}
+                    m = append(m, sm)
                 }
             }
         }
@@ -63,14 +77,16 @@ func visit(path string, f os.FileInfo, err error) error {
 func main() {
     flag.Parse()
     target = flag.Arg(0)
+    if len(target) < 1 || len(target) > 1023 {
+        fmt.Printf("Please input a string (len 1~1024)\n")
+        return
+    }
     upper = strings.ToUpper(target)
     _ = filepath.Walk(".", visit)
-    //fmt.Printf("Walk ends. err=%v\n", err)
+    sort.Sort(ByOccurrences(m))
     output := ""
-    for k,v := range m {
-        for i := 0; i < len(v); i++ {
-            output = strconv.Itoa(k) + "\t" + v[i] + "\n" + output;
-        }    
+    for i := range m {
+        output += strconv.Itoa(m[i].occurrences) + "\t" + m[i].file + "\n";
     }        
     fmt.Printf("Changes\tFile Name\n%s", output)
 }
